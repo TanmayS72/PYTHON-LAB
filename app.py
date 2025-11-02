@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -17,7 +16,7 @@ st.set_page_config(
 )
 
 # TMDB API Configuration
-TMDB_API_KEY = "e4822e991b31008d38b52890eee2aa8c" 
+TMDB_API_KEY = "e4822e991b31008d38b52890eee2aa8c"
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
 
@@ -131,12 +130,29 @@ def load_csv_data(file):
 def clean_data(df):
     """Clean and preprocess data"""
     df = df.copy()
-    df.columns = df.columns.str.lower().str.strip()
+    df.columns = df.columns.str.lower().str.strip().str.replace(' ', '_')
     
+    # Map your column names to standard names
+    column_mapping = {
+        'sr_no.': 'sr_no',
+        'sr_no': 'sr_no',
+        'movie_name': 'title',
+        'release_year': 'year'
+    }
+    
+    df.rename(columns=column_mapping, inplace=True)
+    
+    # Convert numeric columns
     if 'rating' in df.columns:
         df['rating'] = pd.to_numeric(df['rating'], errors='coerce')
     if 'year' in df.columns:
         df['year'] = pd.to_numeric(df['year'], errors='coerce')
+    if 'budget' in df.columns:
+        df['budget'] = pd.to_numeric(df['budget'], errors='coerce')
+    if 'revenue' in df.columns:
+        df['revenue'] = pd.to_numeric(df['revenue'], errors='coerce')
+    if 'profit' in df.columns:
+        df['profit'] = pd.to_numeric(df['profit'], errors='coerce')
     
     return df
 
@@ -148,7 +164,7 @@ def get_genre_distribution(df):
     return None
 
 def recommend_similar_movies_csv(df, movie_title, top_n=5):
-    """Recommend similar movies from CSV based on genre and rating"""
+    """Recommend similar movies from CSV based on genre and profit"""
     movie = df[df['title'].str.lower() == movie_title.lower()]
     
     if movie.empty:
@@ -165,8 +181,8 @@ def recommend_similar_movies_csv(df, movie_title, top_n=5):
         )
         recommendations = recommendations[recommendations['genre_match'] > 0]
     
-    if 'rating' in recommendations.columns:
-        recommendations = recommendations.sort_values(['genre_match', 'rating'], ascending=[False, False])
+    if 'profit' in recommendations.columns:
+        recommendations = recommendations.sort_values(['genre_match', 'profit'], ascending=[False, False])
     
     return recommendations.head(top_n)
 
@@ -243,7 +259,6 @@ def create_correlation_heatmap(df):
     
     return fig
 
-
 def create_rating_category_pie(df):
     """Create pie chart for rating categories using matplotlib"""
     fig, ax = plt.subplots(figsize=(10, 7))
@@ -292,6 +307,7 @@ def create_rating_category_pie(df):
     
     plt.tight_layout()
     return fig
+
 # ==================== MAIN APP ====================
 st.title("🎬 Movie Rating & Recommendation Analyzer")
 st.markdown("### 📊 Real-time API Data + CSV Analysis with Matplotlib Visualizations")
@@ -472,8 +488,8 @@ if mode in ["📁 CSV Mode (Upload Dataset)", "🔄 Both Modes"]:
                 with col1:
                     st.metric("Total Movies", len(df))
                 with col2:
-                    if 'rating' in df.columns:
-                        st.metric("Avg Rating", f"{df['rating'].mean():.2f}")
+                    if 'profit' in df.columns:
+                        st.metric("Avg Profit", f"${df['profit'].mean()/1000000:.1f}M")
                 with col3:
                     if 'year' in df.columns:
                         st.metric("Year Range", f"{int(df['year'].min())}-{int(df['year'].max())}")
@@ -488,19 +504,15 @@ if mode in ["📁 CSV Mode (Upload Dataset)", "🔄 Both Modes"]:
                 st.subheader("📈 Matplotlib Visualizations")
                 
                 viz_option = st.selectbox("Select Visualization:", [
-                    "Rating Distribution",
                     "Genre Bar Chart",
                     "Year Trend",
-                    "Rating vs Year Scatter",
                     "Correlation Heatmap",
-                    "Rating Category Pie Chart"
+                    "Budget vs Revenue Analysis",
+                    "Profit by Genre",
+                    "Top 10 Most Profitable Movies"
                 ])
                 
-                if viz_option == "Rating Distribution":
-                    fig = create_rating_distribution_plot(df)
-                    st.pyplot(fig)
-                
-                elif viz_option == "Genre Bar Chart":
+                if viz_option == "Genre Bar Chart":
                     fig = create_genre_bar_chart(df)
                     st.pyplot(fig)
                 
@@ -508,17 +520,64 @@ if mode in ["📁 CSV Mode (Upload Dataset)", "🔄 Both Modes"]:
                     fig = create_year_trend_plot(df)
                     st.pyplot(fig)
                 
-                elif viz_option == "Rating vs Year Scatter":
-                    fig = create_rating_vs_year_scatter(df)
-                    st.pyplot(fig)
-                
                 elif viz_option == "Correlation Heatmap":
                     fig = create_correlation_heatmap(df)
                     st.pyplot(fig)
                 
-                elif viz_option == "Rating Category Pie Chart":
-                    fig = create_rating_category_pie(df)
-                    st.pyplot(fig)
+                elif viz_option == "Budget vs Revenue Analysis":
+                    if 'budget' in df.columns and 'revenue' in df.columns:
+                        fig, ax = plt.subplots(figsize=(12, 6))
+                        scatter = ax.scatter(df['budget']/1000000, df['revenue']/1000000, 
+                                           c=df['profit']/1000000 if 'profit' in df.columns else 'blue',
+                                           cmap='viridis', s=100, alpha=0.6, edgecolors='black')
+                        ax.set_xlabel('Budget (Millions $)', fontsize=12)
+                        ax.set_ylabel('Revenue (Millions $)', fontsize=12)
+                        ax.set_title('Budget vs Revenue Analysis', fontsize=14, fontweight='bold')
+                        if 'profit' in df.columns:
+                            plt.colorbar(scatter, ax=ax, label='Profit (Millions $)')
+                        ax.grid(True, alpha=0.3)
+                        # Add trend line
+                        z = np.polyfit(df['budget'].dropna(), df['revenue'].dropna(), 1)
+                        p = np.poly1d(z)
+                        ax.plot(df['budget'].sort_values()/1000000, 
+                               p(df['budget'].sort_values())/1000000, 
+                               "r--", alpha=0.8, linewidth=2, label='Trend')
+                        ax.legend()
+                        st.pyplot(fig)
+                    else:
+                        st.info("Budget and Revenue columns not found")
+                
+                elif viz_option == "Profit by Genre":
+                    if 'genre' in df.columns and 'profit' in df.columns:
+                        fig, ax = plt.subplots(figsize=(12, 6))
+                        df_exploded = df.assign(genre=df['genre'].str.split(',')).explode('genre')
+                        df_exploded['genre'] = df_exploded['genre'].str.strip()
+                        genre_profit = df_exploded.groupby('genre')['profit'].sum().sort_values(ascending=False).head(10)
+                        colors = plt.cm.plasma(np.linspace(0, 1, len(genre_profit)))
+                        ax.barh(genre_profit.index, genre_profit.values/1000000, color=colors)
+                        ax.set_xlabel('Total Profit (Millions $)', fontsize=12)
+                        ax.set_ylabel('Genre', fontsize=12)
+                        ax.set_title('Top 10 Most Profitable Genres', fontsize=14, fontweight='bold')
+                        ax.grid(axis='x', alpha=0.3)
+                        st.pyplot(fig)
+                    else:
+                        st.info("Genre and Profit columns not found")
+                
+                elif viz_option == "Top 10 Most Profitable Movies":
+                    if 'title' in df.columns and 'profit' in df.columns:
+                        fig, ax = plt.subplots(figsize=(12, 7))
+                        top_profit = df.nlargest(10, 'profit')
+                        colors = plt.cm.RdYlGn(np.linspace(0.3, 1, len(top_profit)))
+                        ax.barh(range(len(top_profit)), top_profit['profit']/1000000, color=colors)
+                        ax.set_yticks(range(len(top_profit)))
+                        ax.set_yticklabels(top_profit['title'])
+                        ax.set_xlabel('Profit (Millions $)', fontsize=12)
+                        ax.set_ylabel('Movie', fontsize=12)
+                        ax.set_title('Top 10 Most Profitable Movies', fontsize=14, fontweight='bold')
+                        ax.grid(axis='x', alpha=0.3)
+                        st.pyplot(fig)
+                    else:
+                        st.info("Title and Profit columns not found")
             
             with csv_tab3:
                 st.subheader("🔍 Search & Filter")
@@ -528,17 +587,17 @@ if mode in ["📁 CSV Mode (Upload Dataset)", "🔄 Both Modes"]:
                     if 'title' in df.columns:
                         search_term = st.text_input("Search by Title:", "")
                 with col2:
-                    if 'rating' in df.columns:
-                        min_rating = st.slider("Minimum Rating:", 
-                                              float(df['rating'].min()), 
-                                              float(df['rating'].max()), 
-                                              float(df['rating'].min()))
+                    if 'profit' in df.columns:
+                        min_profit = st.slider("Minimum Profit (Millions):", 
+                                              float(df['profit'].min()/1000000), 
+                                              float(df['profit'].max()/1000000), 
+                                              float(df['profit'].min()/1000000))
                 
                 filtered_df = df.copy()
                 if 'title' in df.columns and search_term:
                     filtered_df = filtered_df[filtered_df['title'].str.contains(search_term, case=False, na=False)]
-                if 'rating' in df.columns:
-                    filtered_df = filtered_df[filtered_df['rating'] >= min_rating]
+                if 'profit' in df.columns:
+                    filtered_df = filtered_df[filtered_df['profit'] >= min_profit * 1000000]
                 
                 st.subheader(f"Found {len(filtered_df)} movies")
                 st.dataframe(filtered_df, use_container_width=True)
@@ -555,8 +614,8 @@ if mode in ["📁 CSV Mode (Upload Dataset)", "🔄 Both Modes"]:
                         
                         if recommendations is not None and not recommendations.empty:
                             st.success(f"Movies similar to '{selected_movie}':")
-                            st.dataframe(recommendations[['title', 'genre', 'rating', 'year'] 
-                                                        if all(c in recommendations.columns for c in ['title', 'genre', 'rating', 'year']) 
+                            st.dataframe(recommendations[['title', 'genre', 'profit', 'year'] 
+                                                        if all(c in recommendations.columns for c in ['title', 'genre', 'profit', 'year']) 
                                                         else recommendations], 
                                        use_container_width=True)
     else:
@@ -564,11 +623,13 @@ if mode in ["📁 CSV Mode (Upload Dataset)", "🔄 Both Modes"]:
         
         # Sample data
         sample_data = pd.DataFrame({
-            'title': ['The Matrix', 'Inception', 'Interstellar', 'The Dark Knight', 'Pulp Fiction'],
-            'genre': ['Sci-Fi/Action', 'Sci-Fi/Thriller', 'Sci-Fi/Drama', 'Action/Crime', 'Crime/Drama'],
-            'rating': [8.7, 8.8, 8.6, 9.0, 8.9],
-            'year': [1999, 2010, 2014, 2008, 1994],
-            'director': ['Wachowski', 'Nolan', 'Nolan', 'Nolan', 'Tarantino']
+            'Sr No.': [1, 2, 3, 4, 5],
+            'Movie Name': ['Jurassic World', 'Mad Max: Fury Road', 'Insurgent', 'Star Wars: The Force Awakens', 'Furious 7'],
+            'genre': ['Action', 'Action', 'Thriller', 'Action', 'Action'],
+            'Budget': [150000000, 150000000, 110000000, 200000000, 190000000],
+            'Revenue': [1513528810, 378436354, 295238201, 2068178225, 1506249360],
+            'Profit': [1363528810, 228436354, 185238201, 1868178225, 1316249360],
+            'Release Year': [2015, 2015, 2015, 2015, 2015]
         })
         
         st.subheader("Sample Dataset Format:")
