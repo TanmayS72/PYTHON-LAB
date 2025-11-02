@@ -243,23 +243,55 @@ def create_correlation_heatmap(df):
     
     return fig
 
+
 def create_rating_category_pie(df):
     """Create pie chart for rating categories using matplotlib"""
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(10, 7))
     
     if 'rating' in df.columns:
-        df['rating_category'] = pd.cut(df['rating'], 
+        # Create rating categories
+        df_temp = df.copy()
+        df_temp['rating_category'] = pd.cut(df_temp['rating'], 
                                        bins=[0, 5, 7, 9, 10], 
                                        labels=['Poor (0-5)', 'Average (5-7)', 'Good (7-9)', 'Excellent (9-10)'])
-        rating_counts = df['rating_category'].value_counts()
+        rating_counts = df_temp['rating_category'].value_counts()
         
-        colors = ['#ff9999', '#ffcc99', '#99ccff', '#99ff99']
-        ax.pie(rating_counts.values, labels=rating_counts.index, autopct='%1.1f%%',
-              colors=colors, startangle=90, textprops={'fontsize': 12})
-        ax.set_title('Movies by Rating Category', fontsize=14, fontweight='bold')
+        # Remove categories with 0 count
+        rating_counts = rating_counts[rating_counts > 0]
+        
+        if len(rating_counts) > 0:
+            colors = ['#ff6b6b', '#feca57', '#48dbfb', '#1dd1a1'][:len(rating_counts)]
+            
+            # Create pie chart with clear labels
+            wedges, texts, autotexts = ax.pie(
+                rating_counts.values, 
+                labels=rating_counts.index, 
+                autopct='%1.1f%%',
+                colors=colors, 
+                startangle=140,
+                pctdistance=0.85,
+                explode=[0.05] * len(rating_counts)  # Slightly separate slices
+            )
+            
+            # Style the labels
+            for text in texts:
+                text.set_fontsize(10)
+                text.set_fontweight('bold')
+            
+            # Style the percentages
+            for autotext in autotexts:
+                autotext.set_fontsize(10)
+                autotext.set_fontweight('bold')
+                autotext.set_color('white')
+            
+            ax.set_title('Movies by Rating Category', fontsize=13, fontweight='bold', pad=15)
+        else:
+            ax.text(0.5, 0.5, 'No data available', ha='center', va='center', 
+                   fontsize=12, transform=ax.transAxes)
+            ax.set_title('Movies by Rating Category', fontsize=13, fontweight='bold')
     
+    plt.tight_layout()
     return fig
-
 # ==================== MAIN APP ====================
 st.title("🎬 Movie Rating & Recommendation Analyzer")
 st.markdown("### 📊 Real-time API Data + CSV Analysis with Matplotlib Visualizations")
