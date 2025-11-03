@@ -4,9 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import requests
-from datetime import datetime
-import plotly.express as px
-import plotly.graph_objects as go
+
 
 # Page configuration
 st.set_page_config(
@@ -49,7 +47,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ==================== API FUNCTIONS ====================
+#  API FUNCTIONS 
 def search_movie_api(query):
     """Search for movies using TMDB API"""
     url = f"{TMDB_BASE_URL}/search/movie"
